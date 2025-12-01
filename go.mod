@@ -3,7 +3,7 @@ module github.com/ethan-mdev/authentication-server
 go 1.25.3
 
 require (
-	github.com/ethan-mdev/central-auth v0.0.0-20251130194236-3c8590053f0d
+	github.com/ethan-mdev/central-auth v0.0.0-20251201214753-e7b0c88ed43e
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/cors v1.11.1
 	modernc.org/sqlite v1.40.1

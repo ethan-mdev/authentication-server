@@ -46,7 +46,19 @@ func main() {
 	}
 
 	// JWT
-	jwtManager := jwt.NewManager([]byte(os.Getenv("JWT_SECRET")))
+	privateKey, err := jwt.LoadPrivateKey([]byte(os.Getenv("JWT_PRIVATE_KEY")))
+	if err != nil {
+		log.Fatalf("failed to load private key: %v", err)
+	}
+
+	jwtManager, err := jwt.NewManager(jwt.Config{
+		Algorithm:  "RS256",
+		PrivateKey: privateKey,
+		KeyID:      "key-1",
+	})
+	if err != nil {
+		log.Fatalf("failed to create jwt manager: %v", err)
+	}
 
 	// Handler
 	authHandler := &authhttp.AuthHandler{
@@ -67,6 +79,13 @@ func main() {
 
 	// Protected
 	mux.Handle("POST /change-password", middleware.Auth(jwtManager, authHandler.ChangePassword()))
+
+	// JWKS endpoint for other services to get the public key
+	mux.HandleFunc("GET /.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
+		jwks, _ := jwtManager.JWKS()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jwks)
+	})
 
 	// Health check
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
