@@ -76,6 +76,7 @@ func main() {
 	mux.HandleFunc("POST /register", authHandler.Register())
 	mux.HandleFunc("POST /login", authHandler.Login())
 	mux.HandleFunc("POST /refresh", authHandler.RefreshToken())
+	mux.HandleFunc("POST /logout", authHandler.Logout())
 
 	// Protected
 	mux.Handle("POST /change-password", middleware.Auth(jwtManager, authHandler.ChangePassword()))

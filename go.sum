@@ -1,7 +1,7 @@
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
-github.com/ethan-mdev/central-auth v0.0.0-20251201214753-e7b0c88ed43e h1:EG/ujU1Rf1/XuJzF6Ifs5sWV3QE69mRJ+dOI5Yw6v2U=
-github.com/ethan-mdev/central-auth v0.0.0-20251201214753-e7b0c88ed43e/go.mod h1:Hl+vFl5Es1/4P0xOnM8TK+qbDOoRaQ8bpZAA5umTsI4=
+github.com/ethan-mdev/central-auth v0.0.0-20251202000513-bf5180d47699 h1:jW7v16QrUlVZOthFpM8bq/oLsCCRjQ8b8JoEUquuels=
+github.com/ethan-mdev/central-auth v0.0.0-20251202000513-bf5180d47699/go.mod h1:Hl+vFl5Es1/4P0xOnM8TK+qbDOoRaQ8bpZAA5umTsI4=
 github.com/golang-jwt/jwt/v5 v5.3.0 h1:pv4AsKCKKZuqlgs5sUmn4x8UlGa0kEVt/puTpKx9vvo=
 github.com/golang-jwt/jwt/v5 v5.3.0/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
 github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e h1:ijClszYn+mADRFY17kjQEVQ1XRhq2/JR1M3sGqeJoxs=
