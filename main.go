@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/ethan-mdev/authentication-server/config"
+	"github.com/ethan-mdev/authentication-server/handlers"
+	localstore "github.com/ethan-mdev/authentication-server/storage"
+
+	_ "github.com/lib/pq"
 	"github.com/rs/cors"
-	_ "modernc.org/sqlite"
 
 	authhttp "github.com/ethan-mdev/central-auth/http"
 	"github.com/ethan-mdev/central-auth/jwt"
@@ -20,33 +22,39 @@ import (
 )
 
 func main() {
-	// Load .env
-	godotenv.Load()
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
 
 	// Load database
-	db, err := sql.Open("sqlite", "./auth.db")
+	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
 
-	// Enable WAL mode (safer & faster)
-	db.Exec("PRAGMA journal_mode=WAL;")
-	db.Exec("PRAGMA foreign_keys = ON;")
+	// Test connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("failed to ping database: %v", err)
+	}
+
+	log.Println("Connected to database successfully")
 
 	// Initialize repositories
-	users := storage.NewSQLiteUserRepository(db)
-	if err := users.CreateTable(); err != nil {
-		log.Fatalf("failed to create users table: %v", err)
-	}
+	baseUsers := storage.NewPostgresUserRepository(db)
+	// Note: We manage schema via init.sql, not CreateTable()
+	// This allows us to add custom columns like profile_image
 
-	refreshTokens := tokens.NewSQLiteRefreshRepository(db)
-	if err := refreshTokens.CreateTable(); err != nil {
-		log.Fatalf("failed to create refresh_tokens table: %v", err)
-	}
+	// Wrap with extended functionality
+	users := localstore.NewExtendedUserRepository(baseUsers, db)
+
+	refreshTokens := tokens.NewPostgresRefreshRepository(db)
+	// Note: We manage schema via init.sql, not CreateTable()
 
 	// JWT
-	privateKey, err := jwt.LoadPrivateKey([]byte(os.Getenv("JWT_PRIVATE_KEY")))
+	privateKey, err := jwt.LoadPrivateKey([]byte(cfg.JWTPrivateKey))
 	if err != nil {
 		log.Fatalf("failed to load private key: %v", err)
 	}
@@ -60,14 +68,24 @@ func main() {
 		log.Fatalf("failed to create jwt manager: %v", err)
 	}
 
-	// Handler
+	// Handler (uses base user repository)
 	authHandler := &authhttp.AuthHandler{
-		Users:         users,
+		Users:         baseUsers,
 		RefreshTokens: refreshTokens,
 		Hash:          password.Default(),
 		JWT:           jwtManager,
 		AccessExpiry:  15 * time.Minute,
 		RefreshExpiry: 7 * 24 * time.Hour,
+	}
+
+	// Profile handler
+	profileHandler := &handlers.ProfileHandler{
+		Users: users,
+	}
+
+	// Admin handler
+	adminHandler := &handlers.AdminHandler{
+		Users: users,
 	}
 
 	mux := http.NewServeMux()
@@ -77,9 +95,15 @@ func main() {
 	mux.HandleFunc("POST /login", authHandler.Login())
 	mux.HandleFunc("POST /refresh", authHandler.RefreshToken())
 	mux.HandleFunc("POST /logout", authHandler.Logout())
+	mux.HandleFunc("GET /profile/{userId}", profileHandler.GetProfile())
 
-	// Protected
+	// Protected routes
 	mux.Handle("POST /change-password", middleware.Auth(jwtManager, authHandler.ChangePassword()))
+	mux.Handle("PUT /profile", middleware.Auth(jwtManager, profileHandler.UpdateProfile()))
+
+	// Admin routes
+	mux.Handle("GET /admin/users", middleware.Auth(jwtManager, adminHandler.ListUsers()))
+	mux.Handle("PUT /admin/users/{userId}/role", middleware.Auth(jwtManager, adminHandler.UpdateUserRole()))
 
 	// JWKS endpoint for other services to get the public key
 	mux.HandleFunc("GET /.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
@@ -95,17 +119,12 @@ func main() {
 
 	// CORS
 	c := cors.New(cors.Options{
-		AllowedOrigins: []string{
-			"https://dashboard.ethan-mdev.com",
-			"https://forum.ethan-mdev.com",
-			"https://auth.ethan-mdev.com",
-			"http://localhost:5173",
-		},
+		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
 	})
 
-	log.Println("Auth service running on :8080")
-	log.Fatal(http.ListenAndServe(":8080", c.Handler(mux)))
+	log.Printf("Auth service running on :%s\n", cfg.Port)
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, c.Handler(mux)))
 }
