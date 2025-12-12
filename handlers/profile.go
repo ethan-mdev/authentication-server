@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 
 	"github.com/ethan-mdev/authentication-server/storage"
 	"github.com/ethan-mdev/central-auth/middleware"
@@ -51,7 +52,11 @@ func (h *ProfileHandler) UpdateProfile() http.HandlerFunc {
 			return
 		}
 
-		// TODO: Validate profile image (must be one of the allowed avatars)
+		// Validate profile image (must be avatar-1.png through avatar-20.png)
+		if !isValidAvatar(req.ProfileImage) {
+			http.Error(w, "Invalid avatar selection. Must be avatar-1.png through avatar-20.png", http.StatusBadRequest)
+			return
+		}
 
 		if err := h.Users.UpdateProfileImage(claims.UserID, req.ProfileImage); err != nil {
 			http.Error(w, "Failed to update profile", http.StatusInternalServerError)
@@ -63,4 +68,14 @@ func (h *ProfileHandler) UpdateProfile() http.HandlerFunc {
 			"message": "Profile updated successfully",
 		})
 	}
+}
+
+// isValidAvatar checks if the avatar filename is in the valid range
+func isValidAvatar(filename string) bool {
+	if filename == "" {
+		return false
+	}
+	// Match avatar-1.png through avatar-20.png
+	matched, _ := regexp.MatchString(`^avatar-([1-9]|1[0-9]|20)\.png$`, filename)
+	return matched
 }
