@@ -107,11 +107,18 @@ CREATE TABLE IF NOT EXISTS dashboard.characters (
     name TEXT NOT NULL,
     level INTEGER DEFAULT 1,
     class TEXT NOT NULL,
-    experience INTEGER DEFAULT 0,
     gold INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_played TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS dashboard.items (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    type TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 
