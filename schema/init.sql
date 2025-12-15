@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     password TEXT NOT NULL,
     role VARCHAR(50) NOT NULL DEFAULT 'user',
     profile_image TEXT DEFAULT NULL,
+    balance INTEGER DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -118,9 +119,9 @@ CREATE TABLE IF NOT EXISTS dashboard.items (
     description TEXT,
     type TEXT NOT NULL,
     price INTEGER NOT NULL,
+    image TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
 
 CREATE TABLE IF NOT EXISTS dashboard.item_mall_purchases (
     id SERIAL PRIMARY KEY,
@@ -132,5 +133,18 @@ CREATE TABLE IF NOT EXISTS dashboard.item_mall_purchases (
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS dashboard.credit_purchases (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    credits INTEGER NOT NULL,             -- total credits added to account
+    amount_paid DECIMAL(10,2) NOT NULL,   -- real money paid
+    payment_id TEXT,                      -- external transaction ID
+    status TEXT DEFAULT 'completed',      -- pending, completed, refunded, failed
+    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_purchases_user ON dashboard.credit_purchases(user_id);
+CREATE INDEX IF NOT EXISTS idx_credit_purchases_status ON dashboard.credit_purchases(status);
 CREATE INDEX IF NOT EXISTS idx_characters_user ON dashboard.characters(user_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_user ON dashboard.item_mall_purchases(user_id);

@@ -69,7 +69,7 @@ func (r *ExtendedUserRepository) UpdateRole(userID, role string) error {
 // ListAll returns all users (admin function)
 func (r *ExtendedUserRepository) ListAll() ([]map[string]interface{}, error) {
 	rows, err := r.db.Query(`
-		SELECT id, username, email, role, profile_image, created_at 
+		SELECT id, username, email, role, profile_image, balance, created_at 
 		FROM users 
 		ORDER BY created_at DESC
 	`)
@@ -82,9 +82,10 @@ func (r *ExtendedUserRepository) ListAll() ([]map[string]interface{}, error) {
 	for rows.Next() {
 		var id, username, email, role string
 		var profileImage sql.NullString
+		var balance int
 		var createdAt string
 
-		if err := rows.Scan(&id, &username, &email, &role, &profileImage, &createdAt); err != nil {
+		if err := rows.Scan(&id, &username, &email, &role, &profileImage, &balance, &createdAt); err != nil {
 			return nil, err
 		}
 
@@ -94,6 +95,7 @@ func (r *ExtendedUserRepository) ListAll() ([]map[string]interface{}, error) {
 			"email":         email,
 			"role":          role,
 			"profile_image": profileImage.String,
+			"balance":       balance,
 			"created_at":    createdAt,
 		})
 	}
