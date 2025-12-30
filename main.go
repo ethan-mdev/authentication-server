@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ethan-mdev/authentication-server/config"
@@ -44,8 +48,6 @@ func main() {
 
 	// Initialize repositories
 	baseUsers := storage.NewPostgresUserRepository(db)
-	// Note: We manage schema via init.sql, not CreateTable()
-	// This allows us to add custom columns like profile_image
 
 	// Wrap with extended functionality
 	users := localstore.NewExtendedUserRepository(baseUsers, db)
@@ -125,6 +127,36 @@ func main() {
 		AllowCredentials: true,
 	})
 
-	log.Printf("Auth service running on :%s\n", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, c.Handler(mux)))
+	// Setup server with graceful shutdown
+	server := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      c.Handler(mux),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		log.Printf("Server running on :%s", cfg.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+
+	}
+
+	log.Println("Server exited")
 }
