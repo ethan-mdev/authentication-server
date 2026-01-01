@@ -7,30 +7,19 @@ A personal authentication backend using RS256 JWT signing, built with [central-a
 - Issues RS256 signed JWTs for login/register
 - Exposes JWKS at `/.well-known/jwks.json` for other services to validate tokens
 - Handles refresh token rotation and logout
+- Bridges authentication to a legacy game database (MySQL) that uses MD5 password hashing
+- Manages game account linking and API key generation for launcher authentication
 
-## Setup
+## Architecture
 
-### 1. Generate RSA Key
-
-```bash
-openssl genrsa -out private.pem 2048
-```
-
-### 2. Add to `.env`
-
-```env
-JWT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----"
-```
-
-### 3. Run
-
-```bash
-go run main.go
-```
+| Database | Purpose |
+|----------|---------|
+| PostgreSQL | User auth, bcrypt passwords, API keys (plaintext), account linking |
+| MySQL (Accounts) | Legacy game accounts, MD5 hashed API keys |
+| MySQL (Characters) | Character data lookups for dashboard |
 
 ## Services using this
 
 - [community-hub](https://github.com/ethan-mdev/community-hub) - Forum
-- [dashboard](https://github.com/ethan-mdev/player-portal) - Dashboard
+- [player-portal](https://github.com/ethan-mdev/player-portal) - Dashboard
+- [game-launcher](https://github.com/ethan-mdev/game-launcher) - Retrieves credentials for game client login
