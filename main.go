@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	// Load database
+	// Load authentication database
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
@@ -43,8 +43,31 @@ func main() {
 	if err := db.Ping(); err != nil {
 		log.Fatalf("failed to ping database: %v", err)
 	}
+	log.Println("Connected to authentication database successfully")
 
-	log.Println("Connected to database successfully")
+	// Game account database (MySQL)
+	gameAccountDB, err := sql.Open("mysql", cfg.GameAccountDBURL)
+	if err != nil {
+		log.Fatalf("failed to open game account database: %v", err)
+	}
+	defer gameAccountDB.Close()
+
+	if err := gameAccountDB.Ping(); err != nil {
+		log.Fatalf("failed to ping game account database: %v", err)
+	}
+	log.Println("Connected to game account database successfully")
+
+	// Game character database (MySQL)
+	gameCharacterDB, err := sql.Open("mysql", cfg.GameCharacterDBURL)
+	if err != nil {
+		log.Fatalf("failed to open game character database: %v", err)
+	}
+	defer gameCharacterDB.Close()
+
+	if err := gameCharacterDB.Ping(); err != nil {
+		log.Fatalf("failed to ping game character database: %v", err)
+	}
+	log.Println("Connected to game character database successfully")
 
 	// Initialize repositories
 	baseUsers := storage.NewPostgresUserRepository(db)
@@ -85,6 +108,9 @@ func main() {
 		Users: users,
 	}
 
+	// Game handler
+	gameHandler := handlers.NewGameHandler(users, gameAccountDB, gameCharacterDB)
+
 	// Admin handler
 	adminHandler := &handlers.AdminHandler{
 		Users: users,
@@ -103,9 +129,22 @@ func main() {
 	mux.Handle("POST /change-password", middleware.Auth(jwtManager, authHandler.ChangePassword()))
 	mux.Handle("PUT /profile", middleware.Auth(jwtManager, profileHandler.UpdateProfile()))
 
+	// Game routes
+	mux.Handle("GET /game/credentials", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.GetCredentials)))
+	mux.Handle("GET /game/characters", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.GetCharacters)))
+	mux.Handle("POST /game/verify", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.Verify)))
+
 	// Admin routes
-	mux.Handle("GET /admin/users", middleware.Auth(jwtManager, adminHandler.ListUsers()))
-	mux.Handle("PUT /admin/users/{userId}/role", middleware.Auth(jwtManager, adminHandler.UpdateUserRole()))
+	mux.Handle("GET /admin/users",
+		middleware.Auth(jwtManager,
+			middleware.RequireRole("admin")(adminHandler.ListUsers()),
+		),
+	)
+	mux.Handle("PUT /admin/users/{userId}/role",
+		middleware.Auth(jwtManager,
+			middleware.RequireRole("admin")(adminHandler.UpdateUserRole()),
+		),
+	)
 
 	// JWKS endpoint for other services to get the public key
 	mux.HandleFunc("GET /.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {

@@ -15,13 +15,6 @@ type AdminHandler struct {
 // GET /admin/users
 func (h *AdminHandler) ListUsers() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check if user is admin (role from JWT context)
-		role, ok := r.Context().Value("role").(string)
-		if !ok || role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-
 		// TODO: Implement pagination
 		users, err := h.Users.ListAll()
 		if err != nil {
@@ -38,12 +31,6 @@ func (h *AdminHandler) ListUsers() http.HandlerFunc {
 // PUT /admin/users/{userId}/role
 func (h *AdminHandler) UpdateUserRole() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		role, ok := r.Context().Value("role").(string)
-		if !ok || role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-
 		userId := r.PathValue("userId")
 
 		var req struct {

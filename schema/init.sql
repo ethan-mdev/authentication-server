@@ -18,11 +18,15 @@ CREATE TABLE IF NOT EXISTS public.users (
     profile_image TEXT DEFAULT NULL,
     balance INTEGER DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Game account linking (NULL = unverified)
+    game_account_id INTEGER DEFAULT NULL,
+    game_api_key TEXT DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON public.users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_game_account ON public.users(game_account_id);
 
 CREATE TABLE IF NOT EXISTS public.refresh_tokens (
     token VARCHAR(255) PRIMARY KEY,
@@ -102,17 +106,6 @@ CREATE INDEX IF NOT EXISTS idx_posts_author ON forum.posts(author_id);
 -- ============================================
 CREATE SCHEMA IF NOT EXISTS dashboard;
 
-CREATE TABLE IF NOT EXISTS dashboard.characters (
-    id SERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    level INTEGER DEFAULT 1,
-    class TEXT NOT NULL,
-    gold INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS dashboard.items (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -126,25 +119,25 @@ CREATE TABLE IF NOT EXISTS dashboard.items (
 CREATE TABLE IF NOT EXISTS dashboard.item_mall_purchases (
     id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
+    item_id INTEGER NOT NULL,
     quantity INTEGER DEFAULT 1,
     price_paid INTEGER NOT NULL,
     purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+    FOREIGN KEY (item_id) REFERENCES dashboard.items(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS dashboard.credit_purchases (
     id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
-    credits INTEGER NOT NULL,             -- total credits added to account
-    amount_paid DECIMAL(10,2) NOT NULL,   -- real money paid
-    payment_id TEXT,                      -- external transaction ID
-    status TEXT DEFAULT 'completed',      -- pending, completed, refunded, failed
+    credits INTEGER NOT NULL,
+    amount_paid DECIMAL(10,2) NOT NULL,
+    payment_id TEXT,
+    status TEXT DEFAULT 'completed',
     purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_purchases_user ON dashboard.credit_purchases(user_id);
 CREATE INDEX IF NOT EXISTS idx_credit_purchases_status ON dashboard.credit_purchases(status);
-CREATE INDEX IF NOT EXISTS idx_characters_user ON dashboard.characters(user_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_user ON dashboard.item_mall_purchases(user_id);
