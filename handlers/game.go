@@ -31,6 +31,7 @@ func (h *GameHandler) GetCredentials(w http.ResponseWriter, r *http.Request) {
 	creds, err := h.userRepo.GetGameCredentials(userID)
 	if err != nil {
 		http.Error(w, "Failed to fetch credentials", http.StatusInternalServerError)
+		return
 	}
 
 	if creds == nil {

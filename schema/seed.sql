@@ -19,13 +19,7 @@ BEGIN
         (test_user_id::TEXT, 2750, 9.99, 'completed', NOW() - INTERVAL '14 days'),
         (test_user_id::TEXT, 1000, 4.99, 'completed', NOW() - INTERVAL '30 days');
 
-        -- Add some characters for the test user
-        INSERT INTO dashboard.characters (user_id, name, level, class, gold) VALUES
-        (test_user_id::TEXT, 'ShadowBlade', 85, 'Assassin', 125000),
-        (test_user_id::TEXT, 'HolyLight', 72, 'Priest', 89500),
-        (test_user_id::TEXT, 'IronFist', 45, 'Warrior', 32000);
-
-        RAISE NOTICE 'Created test user (test/test123) with purchase history and characters!';
+        RAISE NOTICE 'Created test user (test/test123) with purchase history!';
     ELSE
         RAISE NOTICE 'Test user already exists, skipping.';
     END IF;
@@ -58,6 +52,31 @@ BEGIN
         RAISE NOTICE 'Seeded store items successfully!';
     ELSE
         RAISE NOTICE 'Store items already exist, skipping.';
+    END IF;
+END $$;
+
+-- ============================================
+-- DEMO USERS (for forum content, no valid passwords)
+-- ============================================
+DO $$
+DECLARE
+    admin_id UUID := gen_random_uuid();
+    user1_id UUID := gen_random_uuid();
+    user2_id UUID := gen_random_uuid();
+    user3_id UUID := gen_random_uuid();
+    user4_id UUID := gen_random_uuid();
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.users WHERE username = 'GameMaster' LIMIT 1) THEN
+        INSERT INTO public.users (id, username, email, password, role, profile_image, balance) VALUES
+        (admin_id::TEXT, 'GameMaster', 'gm@example.com', 'nologin', 'admin', 'avatar-20.png', 0),
+        (user1_id::TEXT, 'DragonSlayer', 'dragon@example.com', 'nologin', 'user', 'avatar-5.png', 5000),
+        (user2_id::TEXT, 'MysticMage', 'mystic@example.com', 'nologin', 'user', 'avatar-12.png', 3200),
+        (user3_id::TEXT, 'NightHunter', 'hunter@example.com', 'nologin', 'user', 'avatar-8.png', 8500),
+        (user4_id::TEXT, 'IronGuard', 'guard@example.com', 'nologin', 'user', 'avatar-15.png', 1500);
+
+        RAISE NOTICE 'Created demo users for forum content!';
+    ELSE
+        RAISE NOTICE 'Demo users already exist, skipping.';
     END IF;
 END $$;
 
@@ -100,31 +119,6 @@ BEGIN
 END $$;
 
 -- ============================================
--- DEMO USERS (for forum content, no valid passwords)
--- ============================================
-DO $$
-DECLARE
-    admin_id UUID := gen_random_uuid();
-    user1_id UUID := gen_random_uuid();
-    user2_id UUID := gen_random_uuid();
-    user3_id UUID := gen_random_uuid();
-    user4_id UUID := gen_random_uuid();
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM public.users WHERE username = 'GameMaster' LIMIT 1) THEN
-        INSERT INTO public.users (id, username, email, password, role, profile_image, balance) VALUES
-        (admin_id::TEXT, 'GameMaster', 'gm@example.com', 'nologin', 'admin', 'avatar-20.png', 0),
-        (user1_id::TEXT, 'DragonSlayer', 'dragon@example.com', 'nologin', 'user', 'avatar-5.png', 5000),
-        (user2_id::TEXT, 'MysticMage', 'mystic@example.com', 'nologin', 'user', 'avatar-12.png', 3200),
-        (user3_id::TEXT, 'NightHunter', 'hunter@example.com', 'nologin', 'user', 'avatar-8.png', 8500),
-        (user4_id::TEXT, 'IronGuard', 'guard@example.com', 'nologin', 'user', 'avatar-15.png', 1500);
-
-        RAISE NOTICE 'Created demo users for forum content!';
-    ELSE
-        RAISE NOTICE 'Demo users already exist, skipping.';
-    END IF;
-END $$;
-
--- ============================================
 -- FORUM THREADS AND POSTS
 -- ============================================
 DO $$
@@ -138,8 +132,6 @@ DECLARE
     events_cat TEXT;
     general_cat TEXT;
     guides_cat TEXT;
-    buying_cat TEXT;
-    selling_cat TEXT;
     thread_id INTEGER;
 BEGIN
     -- Get user IDs
@@ -154,8 +146,6 @@ BEGIN
     SELECT id INTO events_cat FROM forum.categories WHERE slug = 'events';
     SELECT id INTO general_cat FROM forum.categories WHERE slug = 'general-discussion';
     SELECT id INTO guides_cat FROM forum.categories WHERE slug = 'strategies-guides';
-    SELECT id INTO buying_cat FROM forum.categories WHERE slug = 'buying';
-    SELECT id INTO selling_cat FROM forum.categories WHERE slug = 'selling';
 
     IF admin_id IS NULL OR updates_cat IS NULL THEN
         RAISE NOTICE 'Required data not found, skipping forum content.';
@@ -164,43 +154,34 @@ BEGIN
 
     IF NOT EXISTS (SELECT 1 FROM forum.threads LIMIT 1) THEN
         
-        -- Thread 1: Server Update (Announcements)
+        -- Thread 1: Server Update
         INSERT INTO forum.threads (category_id, title, author_id, is_sticky, created_at)
         VALUES (updates_cat, 'Patch 2.5.0 - Winter Update Now Live!', admin_id, true, NOW() - INTERVAL '2 days')
         RETURNING id INTO thread_id;
         
         INSERT INTO forum.posts (thread_id, author_id, content, created_at) VALUES
-        (thread_id, admin_id, 'We are excited to announce that Patch 2.5.0 is now live! This update brings new winter-themed content, balance changes, and bug fixes.
+        (thread_id, admin_id, 'We are excited to announce that Patch 2.5.0 is now live!
 
 **New Features:**
 - Winter Wonderland event zone
 - 5 new winter costumes
 - Ice Dragon world boss
 
-**Balance Changes:**
-- Warrior base HP increased by 10%
-- Mage fireball damage reduced by 5%
-
 See you in-game!', NOW() - INTERVAL '2 days'),
-        (thread_id, user1_id, 'Finally! Been waiting for this update. The ice dragon looks amazing!', NOW() - INTERVAL '2 days' + INTERVAL '2 hours'),
-        (thread_id, user2_id, 'Mage nerf? Really? We were already struggling in PvP...', NOW() - INTERVAL '2 days' + INTERVAL '3 hours'),
-        (thread_id, user3_id, 'Love the new costumes! Already bought the Frost Assassin set.', NOW() - INTERVAL '1 day');
+        (thread_id, user1_id, 'Finally! Been waiting for this update.', NOW() - INTERVAL '2 days' + INTERVAL '2 hours'),
+        (thread_id, user2_id, 'Love the new costumes!', NOW() - INTERVAL '1 day');
 
-        -- Thread 2: Event Announcement
+        -- Thread 2: Event
         INSERT INTO forum.threads (category_id, title, author_id, is_sticky, created_at)
         VALUES (events_cat, 'Double XP Weekend - Dec 20-22!', admin_id, true, NOW() - INTERVAL '1 day')
         RETURNING id INTO thread_id;
         
         INSERT INTO forum.posts (thread_id, author_id, content, created_at) VALUES
-        (thread_id, admin_id, 'Get ready for our Double XP Weekend event!
+        (thread_id, admin_id, 'Get ready for Double XP Weekend!
 
-**When:** December 20th - 22nd (All day)
-**What:** 2x Experience from all sources
-
-This is a great opportunity to level up your alts or push to max level. Stack with XP boosts for even more gains!', NOW() - INTERVAL '1 day'),
-        (thread_id, user4_id, 'Perfect timing! I just started a new character.', NOW() - INTERVAL '1 day' + INTERVAL '1 hour'),
-        (thread_id, user1_id, 'Does this stack with the premium XP boost from the store?', NOW() - INTERVAL '20 hours'),
-        (thread_id, admin_id, 'Yes! All XP bonuses stack multiplicatively.', NOW() - INTERVAL '18 hours');
+**When:** December 20th - 22nd
+**What:** 2x Experience from all sources', NOW() - INTERVAL '1 day'),
+        (thread_id, user4_id, 'Perfect timing!', NOW() - INTERVAL '1 day' + INTERVAL '1 hour');
 
         -- Thread 3: General Discussion
         INSERT INTO forum.threads (category_id, title, author_id, created_at)
@@ -208,74 +189,32 @@ This is a great opportunity to level up your alts or push to max level. Stack wi
         RETURNING id INTO thread_id;
         
         INSERT INTO forum.posts (thread_id, author_id, content, created_at) VALUES
-        (thread_id, user3_id, 'Hey everyone! I mostly play solo and wondering which class is best for that playstyle. I like being able to clear content without relying on groups.', NOW() - INTERVAL '5 days'),
-        (thread_id, user1_id, 'Assassin is great for solo. High burst damage and good survivability with stealth.', NOW() - INTERVAL '5 days' + INTERVAL '30 minutes'),
-        (thread_id, user2_id, 'I''d recommend Mage actually. Range + AoE makes farming super efficient. Just need to learn positioning.', NOW() - INTERVAL '5 days' + INTERVAL '1 hour'),
-        (thread_id, user4_id, 'Warrior with lifesteal build. You can literally face-tank anything.', NOW() - INTERVAL '4 days'),
-        (thread_id, user3_id, 'Thanks for the suggestions! Thinking I''ll try Assassin first.', NOW() - INTERVAL '4 days' + INTERVAL '2 hours');
+        (thread_id, user3_id, 'Which class is best for solo content?', NOW() - INTERVAL '5 days'),
+        (thread_id, user1_id, 'Assassin is great for solo.', NOW() - INTERVAL '5 days' + INTERVAL '30 minutes'),
+        (thread_id, user2_id, 'I''d recommend Mage actually.', NOW() - INTERVAL '5 days' + INTERVAL '1 hour');
 
-        -- Thread 4: Strategy Guide
-        INSERT INTO forum.threads (category_id, title, author_id, is_sticky, created_at)
-        VALUES (guides_cat, '[Guide] Ice Dragon World Boss - Full Strategy', user1_id, false, NOW() - INTERVAL '1 day')
+        -- Thread 4: Guide
+        INSERT INTO forum.threads (category_id, title, author_id, created_at)
+        VALUES (guides_cat, '[Guide] Ice Dragon World Boss', user1_id, NOW() - INTERVAL '1 day')
         RETURNING id INTO thread_id;
         
         INSERT INTO forum.posts (thread_id, author_id, content, created_at) VALUES
-        (thread_id, user1_id, '# Ice Dragon World Boss Guide
-
-After many attempts, my guild finally has this boss figured out. Here''s our strategy:
+        (thread_id, user1_id, '# Ice Dragon Guide
 
 ## Phase 1 (100% - 70%)
 - Tank faces boss away from raid
-- Avoid frost breath (frontal cone)
-- Stack for heals
+- Avoid frost breath
 
-## Phase 2 (70% - 30%)
-- Boss summons ice adds - kill them ASAP
-- Spread out to avoid chain frost
-- Use defensive cooldowns during Blizzard
+## Phase 2 (70% - 30%)  
+- Kill ice adds ASAP
+- Spread for chain frost
 
 ## Phase 3 (30% - 0%)
-- All mechanics from P1 and P2
-- Enrage timer starts - pop all DPS cooldowns
-- Healer focus on tank, others use potions
+- Pop all cooldowns
+- Healer focus tank
 
-Good luck everyone!', NOW() - INTERVAL '1 day'),
-        (thread_id, user2_id, 'Great guide! We wiped 10 times before figuring out the add phase.', NOW() - INTERVAL '20 hours'),
-        (thread_id, user4_id, 'What''s the minimum gear score you''d recommend?', NOW() - INTERVAL '15 hours'),
-        (thread_id, user1_id, 'We did it with average 4500 GS, but 5000+ makes it much smoother.', NOW() - INTERVAL '12 hours');
-
-        -- Thread 5: Buying post
-        INSERT INTO forum.threads (category_id, title, author_id, created_at)
-        VALUES (buying_cat, 'WTB Dragon Scale x50 - Paying 500g each', user2_id, NOW() - INTERVAL '3 days')
-        RETURNING id INTO thread_id;
-        
-        INSERT INTO forum.posts (thread_id, author_id, content, created_at) VALUES
-        (thread_id, user2_id, 'Looking to buy Dragon Scales for crafting. Need 50 total, paying 500 gold each (25k total).
-
-PM me in-game: MysticMage
-
-Can also trade XP boost scrolls if you prefer.', NOW() - INTERVAL '3 days'),
-        (thread_id, user3_id, 'I have 20 scales. Will PM you tonight.', NOW() - INTERVAL '3 days' + INTERVAL '2 hours'),
-        (thread_id, user2_id, 'Sounds good!', NOW() - INTERVAL '3 days' + INTERVAL '3 hours');
-
-        -- Thread 6: Selling post
-        INSERT INTO forum.threads (category_id, title, author_id, created_at)
-        VALUES (selling_cat, 'Selling Legendary Staff of Flames - 150k', user1_id, NOW() - INTERVAL '6 hours')
-        RETURNING id INTO thread_id;
-        
-        INSERT INTO forum.posts (thread_id, author_id, content, created_at) VALUES
-        (thread_id, user1_id, 'Got a duplicate legendary drop, selling my extra.
-
-**Legendary Staff of Flames**
-- +250 Magic Attack
-- +15% Fire Damage
-- +100 Critical Rating
-
-Price: 150,000 gold (negotiable)
-
-Whisper DragonSlayer in-game or reply here.', NOW() - INTERVAL '6 hours'),
-        (thread_id, user2_id, 'Would you take 120k?', NOW() - INTERVAL '4 hours'),
-        (thread_id, user1_id, 'Meet me at 135k and it''s yours.', NOW() - INTERVAL '3 hours');
+Good luck!', NOW() - INTERVAL '1 day'),
+        (thread_id, user2_id, 'Great guide!', NOW() - INTERVAL '20 hours');
 
         RAISE NOTICE 'Seeded forum threads and posts successfully!';
     ELSE
