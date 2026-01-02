@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,46 +27,57 @@ import (
 )
 
 func main() {
+	// Setup structured logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 
 	// PostgreSQL (auth)
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
+		slog.Error("failed to open database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	if err := db.Ping(); err != nil {
-		log.Fatalf("failed to ping database: %v", err)
+		slog.Error("failed to ping database", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Connected to authentication database successfully")
+	slog.Info("connected to authentication database")
 
 	// SQL Server (game accounts)
 	gameAccountDB, err := sql.Open("sqlserver", cfg.GameAccountDBURL)
 	if err != nil {
-		log.Fatalf("failed to open game account database: %v", err)
+		slog.Error("failed to open game account database", "error", err)
+		os.Exit(1)
 	}
 	defer gameAccountDB.Close()
 
 	if err := gameAccountDB.Ping(); err != nil {
-		log.Fatalf("failed to ping game account database: %v", err)
+		slog.Error("failed to ping game account database", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Connected to game account database successfully")
+	slog.Info("connected to game account database")
 
 	// SQL Server (game characters)
 	gameCharacterDB, err := sql.Open("sqlserver", cfg.GameCharacterDBURL)
 	if err != nil {
-		log.Fatalf("failed to open game character database: %v", err)
+		slog.Error("failed to open game character database", "error", err)
+		os.Exit(1)
 	}
 	defer gameCharacterDB.Close()
 
 	if err := gameCharacterDB.Ping(); err != nil {
-		log.Fatalf("failed to ping game character database: %v", err)
+		slog.Error("failed to ping game character database", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Connected to game character database successfully")
+	slog.Info("connected to game character database")
 
 	// Initialize repositories
 	baseUsers := storage.NewPostgresUserRepository(db)
@@ -76,7 +87,8 @@ func main() {
 	// JWT
 	privateKey, err := jwt.LoadPrivateKey([]byte(cfg.JWTPrivateKey))
 	if err != nil {
-		log.Fatalf("failed to load private key: %v", err)
+		slog.Error("failed to load private key", "error", err)
+		os.Exit(1)
 	}
 
 	jwtManager, err := jwt.NewManager(jwt.Config{
@@ -85,7 +97,8 @@ func main() {
 		KeyID:      "key-1",
 	})
 	if err != nil {
-		log.Fatalf("failed to create jwt manager: %v", err)
+		slog.Error("failed to create jwt manager", "error", err)
+		os.Exit(1)
 	}
 
 	// Handlers
@@ -167,9 +180,10 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Server running on :%s", cfg.Port)
+		slog.Info("server running", "port", cfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+			slog.Error("server failed to start", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -177,14 +191,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	slog.Info("shutting down server")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		slog.Error("server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server exited")
+	slog.Info("server exited")
 }
