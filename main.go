@@ -15,6 +15,7 @@ import (
 	localstore "github.com/ethan-mdev/authentication-server/storage"
 
 	_ "github.com/lib/pq"
+	_ "github.com/microsoft/go-mssqldb"
 	"github.com/rs/cors"
 
 	authhttp "github.com/ethan-mdev/central-auth/http"
@@ -26,27 +27,25 @@ import (
 )
 
 func main() {
-	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	// Load authentication database
+	// PostgreSQL (auth)
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
 
-	// Test connection
 	if err := db.Ping(); err != nil {
 		log.Fatalf("failed to ping database: %v", err)
 	}
 	log.Println("Connected to authentication database successfully")
 
-	// Game account database (MySQL)
-	gameAccountDB, err := sql.Open("mysql", cfg.GameAccountDBURL)
+	// SQL Server (game accounts)
+	gameAccountDB, err := sql.Open("sqlserver", cfg.GameAccountDBURL)
 	if err != nil {
 		log.Fatalf("failed to open game account database: %v", err)
 	}
@@ -57,8 +56,8 @@ func main() {
 	}
 	log.Println("Connected to game account database successfully")
 
-	// Game character database (MySQL)
-	gameCharacterDB, err := sql.Open("mysql", cfg.GameCharacterDBURL)
+	// SQL Server (game characters)
+	gameCharacterDB, err := sql.Open("sqlserver", cfg.GameCharacterDBURL)
 	if err != nil {
 		log.Fatalf("failed to open game character database: %v", err)
 	}
@@ -71,12 +70,8 @@ func main() {
 
 	// Initialize repositories
 	baseUsers := storage.NewPostgresUserRepository(db)
-
-	// Wrap with extended functionality
 	users := localstore.NewExtendedUserRepository(baseUsers, db)
-
 	refreshTokens := tokens.NewPostgresRefreshRepository(db)
-	// Note: We manage schema via init.sql, not CreateTable()
 
 	// JWT
 	privateKey, err := jwt.LoadPrivateKey([]byte(cfg.JWTPrivateKey))
@@ -93,7 +88,7 @@ func main() {
 		log.Fatalf("failed to create jwt manager: %v", err)
 	}
 
-	// Handler (uses base user repository)
+	// Handlers
 	authHandler := &authhttp.AuthHandler{
 		Users:         baseUsers,
 		RefreshTokens: refreshTokens,
@@ -103,15 +98,12 @@ func main() {
 		RefreshExpiry: 7 * 24 * time.Hour,
 	}
 
-	// Profile handler
 	profileHandler := &handlers.ProfileHandler{
 		Users: users,
 	}
 
-	// Game handler
 	gameHandler := handlers.NewGameHandler(users, gameAccountDB, gameCharacterDB)
 
-	// Admin handler
 	adminHandler := &handlers.AdminHandler{
 		Users: users,
 	}
@@ -146,7 +138,7 @@ func main() {
 		),
 	)
 
-	// JWKS endpoint for other services to get the public key
+	// JWKS endpoint
 	mux.HandleFunc("GET /.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
 		jwks, _ := jwtManager.JWKS()
 		w.Header().Set("Content-Type", "application/json")
@@ -166,7 +158,6 @@ func main() {
 		AllowCredentials: true,
 	})
 
-	// Setup server with graceful shutdown
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      c.Handler(mux),
@@ -182,7 +173,6 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -194,7 +184,6 @@ func main() {
 
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
-
 	}
 
 	log.Println("Server exited")

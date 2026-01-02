@@ -8,13 +8,19 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/ethan-mdev/authentication-server/queries"
 	"github.com/ethan-mdev/authentication-server/storage"
+	"github.com/ethan-mdev/central-auth/middleware"
+)
+
+var (
+	createAccountSQL = queries.Load("game/create_account.sql")
 )
 
 type GameHandler struct {
 	userRepo    *storage.ExtendedUserRepository
-	accountDB   *sql.DB // MySQL - accounts
-	characterDB *sql.DB // MySQL - characters
+	accountDB   *sql.DB
+	characterDB *sql.DB
 }
 
 func NewGameHandler(userRepo *storage.ExtendedUserRepository, accountDB, characterDB *sql.DB) *GameHandler {
@@ -26,9 +32,13 @@ func NewGameHandler(userRepo *storage.ExtendedUserRepository, accountDB, charact
 }
 
 func (h *GameHandler) GetCredentials(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	claims, ok := middleware.GetClaims(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	creds, err := h.userRepo.GetGameCredentials(userID)
+	creds, err := h.userRepo.GetGameCredentials(claims.UserID)
 	if err != nil {
 		http.Error(w, "Failed to fetch credentials", http.StatusInternalServerError)
 		return
@@ -53,9 +63,13 @@ func (h *GameHandler) GetCredentials(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GameHandler) GetCharacters(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	claims, ok := middleware.GetClaims(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	creds, err := h.userRepo.GetGameCredentials(userID)
+	creds, err := h.userRepo.GetGameCredentials(claims.UserID)
 	if err != nil {
 		http.Error(w, "Failed to fetch credentials", http.StatusInternalServerError)
 		return
@@ -70,14 +84,21 @@ func (h *GameHandler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	// TODO: Query MySQL game database for characters
+
+	// TODO: Query SQL Server character database
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode([]interface{}{})
 }
 
 func (h *GameHandler) Verify(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	claims, ok := middleware.GetClaims(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Check if already linked
-	linked, err := h.userRepo.IsGameLinked(userID)
+	linked, err := h.userRepo.IsGameLinked(claims.UserID)
 	if err != nil {
 		http.Error(w, "Failed to check link status", http.StatusInternalServerError)
 		return
@@ -92,18 +113,15 @@ func (h *GameHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Validate verification token (email/Discord)
-	// For now, we'll skip token validation
-
 	// Get username for game account
-	username, err := h.userRepo.GetUsernameByID(userID)
+	username, err := h.userRepo.GetUsernameByID(claims.UserID)
 	if err != nil {
 		http.Error(w, "Failed to get username", http.StatusInternalServerError)
 		return
 	}
 
 	// Generate API key
-	apiKey, err := generateApiKey(32)
+	apiKey, err := generateApiKey(16)
 	if err != nil {
 		http.Error(w, "Failed to generate API key", http.StatusInternalServerError)
 		return
@@ -112,18 +130,17 @@ func (h *GameHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	// MD5 hash for game database
 	md5Hash := md5Hash(apiKey)
 
-	// Create account in database
+	// Create account in SQL Server
 	var gameAccountID int
-	err = h.accountDB.QueryRow(`CALL create_account(?, ?)`, username, md5Hash).Scan(&gameAccountID)
+	err = h.accountDB.QueryRow(createAccountSQL, username, md5Hash).Scan(&gameAccountID)
 	if err != nil {
-		http.Error(w, "Failed to create game account", http.StatusInternalServerError)
+		http.Error(w, "Failed to create game account: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Link in PostgreSQL
-	err = h.userRepo.LinkGameAccount(userID, gameAccountID, apiKey)
+	err = h.userRepo.LinkGameAccount(claims.UserID, gameAccountID, apiKey)
 	if err != nil {
-		// TODO: Consider rolling back the MySQL account creation
 		http.Error(w, "Failed to link game account", http.StatusInternalServerError)
 		return
 	}
@@ -144,7 +161,6 @@ func generateApiKey(length int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// Game DB uses md5 hash as password, so we'll just hash our api key for the database
 func md5Hash(text string) string {
 	hash := md5.Sum([]byte(text))
 	return hex.EncodeToString(hash[:])
