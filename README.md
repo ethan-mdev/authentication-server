@@ -7,8 +7,7 @@ A personal authentication backend using RS256 JWT signing, built with [central-a
 - Issues RS256 signed JWTs for login/register
 - Exposes JWKS at `/.well-known/jwks.json` for other services to validate tokens
 - Handles refresh token rotation and logout
-- Bridges authentication to a legacy game database (MySQL) that uses MD5 password hashing
-- Manages game account linking and API key generation for launcher authentication
+- Bridges authentication to a legacy game database (MySQL) that uses MD5 password hashing by using api keys that can be rotated in the case of exposure.
 
 ## Architecture
 

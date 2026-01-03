@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/ethan-mdev/authentication-server/queries"
@@ -15,12 +16,22 @@ import (
 
 var (
 	createAccountSQL = queries.Load("game/create_account.sql")
+	getCharactersSQL = queries.Load("game/get_characters.sql")
 )
 
 type GameHandler struct {
 	userRepo    *storage.ExtendedUserRepository
 	accountDB   *sql.DB
 	characterDB *sql.DB
+}
+
+type Character struct {
+	CharNo   int    `json:"charNo"`
+	Name     string `json:"name"`
+	Level    int    `json:"level"`
+	Playtime int    `json:"playtime"`
+	Money    int64  `json:"money"`
+	ClassID  int    `json:"classId"`
 }
 
 func NewGameHandler(userRepo *storage.ExtendedUserRepository, accountDB, characterDB *sql.DB) *GameHandler {
@@ -71,6 +82,7 @@ func (h *GameHandler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 
 	creds, err := h.userRepo.GetGameCredentials(claims.UserID)
 	if err != nil {
+		slog.Error("failed to fetch credentials", "error", err, "user_id", claims.UserID)
 		http.Error(w, "Failed to fetch credentials", http.StatusInternalServerError)
 		return
 	}
@@ -85,9 +97,34 @@ func (h *GameHandler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Query SQL Server character database
+	rows, err := h.characterDB.Query(getCharactersSQL, creds.GameAccountID)
+	if err != nil {
+		slog.Error("failed to query characters", "error", err, "game_account_id", creds.GameAccountID)
+		http.Error(w, "Failed to fetch characters", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	characters := []Character{}
+	for rows.Next() {
+		var c Character
+		if err := rows.Scan(&c.CharNo, &c.Name, &c.Level, &c.Playtime, &c.Money, &c.ClassID); err != nil {
+			slog.Error("failed to scan character", "error", err)
+			continue
+		}
+		characters = append(characters, c)
+	}
+
+	if err := rows.Err(); err != nil {
+		slog.Error("error iterating characters", "error", err)
+		http.Error(w, "Failed to fetch characters", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Debug("fetched characters", "user_id", claims.UserID, "count", len(characters))
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode([]interface{}{})
+	json.NewEncoder(w).Encode(characters)
 }
 
 func (h *GameHandler) Verify(w http.ResponseWriter, r *http.Request) {

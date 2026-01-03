@@ -25,13 +25,6 @@ func Load() (*Config, error) {
 		GameAccountDBURL:   os.Getenv("GAME_ACCOUNT_DB_URL"),
 		GameCharacterDBURL: os.Getenv("GAME_CHARACTER_DB_URL"),
 		Port:               os.Getenv("PORT"),
-		AllowedOrigins: []string{
-			"https://dashboard.ethan-mdev.com",
-			"https://forum.ethan-mdev.com",
-			"https://auth.ethan-mdev.com",
-			"http://localhost:5173",
-			"http://localhost:5174",
-			"http://localhost:5175",
-		},
+		AllowedOrigins:     []string{"*"},
 	}, nil
 }
