@@ -61,7 +61,7 @@ func (r *ExtendedUserRepository) UpdateProfileImage(userID, profileImage string)
 	return err
 }
 
-// Fetches the user's game credentials for the launcher pipe
+// Fetches the user's game credentials
 func (r *ExtendedUserRepository) GetGameCredentials(userID string) (*GameCredentials, error) {
 	var username string
 	var gameAccountID sql.NullInt64

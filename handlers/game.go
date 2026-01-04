@@ -15,8 +15,10 @@ import (
 )
 
 var (
-	createAccountSQL = queries.Load("game/create_account.sql")
-	getCharactersSQL = queries.Load("game/get_characters.sql")
+	createAccountSQL   = queries.Load("game/create_account.sql")
+	getCharactersSQL   = queries.Load("game/get_characters.sql")
+	unstuckSQL         = queries.Load("game/unstuck.sql")
+	verifyCharacterSQL = queries.Load("game/verify_character.sql")
 )
 
 type GameHandler struct {
@@ -32,6 +34,10 @@ type Character struct {
 	Playtime int    `json:"playtime"`
 	Money    int64  `json:"money"`
 	ClassID  int    `json:"classId"`
+}
+
+type UnstuckRequest struct {
+	CharacterName string `json:"character_name"`
 }
 
 func NewGameHandler(userRepo *storage.ExtendedUserRepository, accountDB, characterDB *sql.DB) *GameHandler {
@@ -125,6 +131,61 @@ func (h *GameHandler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(characters)
+}
+
+func (h *GameHandler) UnstuckCharacter(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetClaims(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req UnstuckRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.CharacterName == "" {
+		http.Error(w, "Character name required", http.StatusBadRequest)
+		return
+	}
+
+	// Get user's game account ID
+	creds, err := h.userRepo.GetGameCredentials(claims.UserID)
+	if err != nil || creds == nil {
+		slog.Error("failed to fetch credentials", "error", err, "user_id", claims.UserID)
+		http.Error(w, "No game account linked", http.StatusForbidden)
+		return
+	}
+
+	// Verify character belongs to user
+	var charNo int
+	err = h.characterDB.QueryRow(verifyCharacterSQL, req.CharacterName, creds.GameAccountID).Scan(&charNo)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Character not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.Error("failed to verify character", "error", err)
+		http.Error(w, "Failed to verify character", http.StatusInternalServerError)
+		return
+	}
+
+	// Move character to safe location
+	_, err = h.characterDB.Exec(unstuckSQL, charNo)
+	if err != nil {
+		slog.Error("failed to unstuck character", "error", err, "char_no", charNo)
+		http.Error(w, "Unstuck operation failed", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("character unstuck", "user_id", claims.UserID, "character", req.CharacterName)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": req.CharacterName + " has been moved to town.",
+	})
 }
 
 func (h *GameHandler) Verify(w http.ResponseWriter, r *http.Request) {
