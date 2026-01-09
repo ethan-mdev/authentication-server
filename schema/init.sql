@@ -149,6 +149,36 @@ CREATE TABLE IF NOT EXISTS dashboard.credit_purchases (
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS dashboard.vouchers (
+    id SERIAL PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    description TEXT,
+    max_total_redemptions INTEGER DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS dashboard.voucher_contents (
+    id SERIAL PRIMARY KEY,
+    voucher_id INTEGER NOT NULL,
+    game_goods_no INTEGER NOT NULL,
+    quantity INTEGER DEFAULT 1,
+    FOREIGN KEY (voucher_id) REFERENCES dashboard.vouchers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS dashboard.voucher_redemptions (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    voucher_id INTEGER NOT NULL,
+    redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+    FOREIGN KEY (voucher_id) REFERENCES dashboard.vouchers(id) ON DELETE CASCADE,
+    UNIQUE(user_id, voucher_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_credit_purchases_user ON dashboard.credit_purchases(user_id);
 CREATE INDEX IF NOT EXISTS idx_credit_purchases_status ON dashboard.credit_purchases(status);
 CREATE INDEX IF NOT EXISTS idx_purchases_user ON dashboard.item_mall_purchases(user_id);
+CREATE INDEX IF NOT EXISTS idx_vouchers_code ON dashboard.vouchers(code);
+CREATE INDEX IF NOT EXISTS idx_voucher_contents_voucher ON dashboard.voucher_contents(voucher_id);
+CREATE INDEX IF NOT EXISTS idx_voucher_redemptions_user ON dashboard.voucher_redemptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_voucher_redemptions_voucher ON dashboard.voucher_redemptions(voucher_id);

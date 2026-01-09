@@ -140,6 +140,7 @@ func main() {
 	mux.Handle("POST /game/verify", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.Verify)))
 	mux.Handle("POST /game/unstuck", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.UnstuckCharacter)))
 	mux.Handle("POST /game/purchase", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.PurchaseItem)))
+	mux.Handle("POST /game/voucher/redeem", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.RedeemVoucher)))
 
 	// Admin routes
 	mux.Handle("GET /admin/users",

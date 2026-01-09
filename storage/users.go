@@ -272,3 +272,98 @@ func (r *ExtendedUserRepository) PurchaseItem(userID string, itemID, quantity in
 
 	return newBalance, nil
 }
+
+// GetVoucherByCode fetches voucher details by code
+func (r *ExtendedUserRepository) GetVoucherByCode(code string) (map[string]interface{}, error) {
+	var id int
+	var voucherCode, description string
+	var maxTotalRedemptions sql.NullInt64
+
+	err := r.db.QueryRow(`
+		SELECT id, code, description, max_total_redemptions
+		FROM dashboard.vouchers
+		WHERE code = $1
+	`, code).Scan(&id, &voucherCode, &description, &maxTotalRedemptions)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var maxTotal interface{}
+	if maxTotalRedemptions.Valid {
+		maxTotal = int(maxTotalRedemptions.Int64)
+	} else {
+		maxTotal = nil
+	}
+
+	return map[string]interface{}{
+		"id":                    id,
+		"code":                  voucherCode,
+		"description":           description,
+		"max_total_redemptions": maxTotal,
+	}, nil
+}
+
+// GetVoucherContents returns the game goods this voucher contains
+func (r *ExtendedUserRepository) GetVoucherContents(voucherID int) ([]map[string]int, error) {
+	rows, err := r.db.Query(`
+		SELECT game_goods_no, quantity
+		FROM dashboard.voucher_contents
+		WHERE voucher_id = $1
+		ORDER BY id
+	`, voucherID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var contents []map[string]int
+	for rows.Next() {
+		var goodsNo, quantity int
+		if err := rows.Scan(&goodsNo, &quantity); err != nil {
+			return nil, err
+		}
+		contents = append(contents, map[string]int{
+			"game_goods_no": goodsNo,
+			"quantity":      quantity,
+		})
+	}
+
+	return contents, rows.Err()
+}
+
+// IsVoucherRedeemed checks if a user has already redeemed a voucher
+func (r *ExtendedUserRepository) IsVoucherRedeemed(userID string, voucherID int) (bool, error) {
+	var count int
+	err := r.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM dashboard.voucher_redemptions 
+		WHERE user_id = $1 AND voucher_id = $2
+	`, userID, voucherID).Scan(&count)
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// MarkVoucherRedeemed records that a user has redeemed a voucher
+func (r *ExtendedUserRepository) MarkVoucherRedeemed(userID string, voucherID int) error {
+	_, err := r.db.Exec(`
+		INSERT INTO dashboard.voucher_redemptions (user_id, voucher_id)
+		VALUES ($1, $2)
+	`, userID, voucherID)
+	return err
+}
+
+// GetTotalRedemptionCount returns total number of times a voucher has been redeemed
+func (r *ExtendedUserRepository) GetTotalRedemptionCount(voucherID int) (int, error) {
+	var count int
+	err := r.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM dashboard.voucher_redemptions 
+		WHERE voucher_id = $1
+	`, voucherID).Scan(&count)
+	return count, err
+}

@@ -52,7 +52,7 @@ BEGIN
         
         -- Single items (example mappings - adjust to game)
         INSERT INTO dashboard.item_contents (item_id, game_goods_no, quantity) VALUES
-        (shadow_cloak_id, 1001, 1),    -- Shadow Cloak = goodsNo 1001
+        (shadow_cloak_id, 10013, 1),    -- Shadow Cloak = goodsNo 1001
         (golden_armor_id, 1002, 1),    -- Golden Armor = goodsNo 1002
         (phoenix_wings_id, 1003, 1),   -- Phoenix Wings = goodsNo 1003
         (xp_boost_1h_id, 2001, 1),     -- XP Boost 1h = goodsNo 2001
@@ -64,9 +64,9 @@ BEGIN
         (starter_bundle_id, 1001, 1),  -- Shadow Cloak
         
         -- Premium Bundle (multiple items)
-        (premium_bundle_id, 2002, 1),  -- XP Boost 24h
-        (premium_bundle_id, 2003, 1),  -- Gold Boost
-        (premium_bundle_id, 1002, 1),  -- Golden Armor
+        (premium_bundle_id, 10001, 1),  -- XP Boost 24h
+        (premium_bundle_id, 10002, 1),  -- Gold Boost
+        (premium_bundle_id, 10003, 1),  -- Golden Armor
         
         -- Ultimate Bundle (multiple items)
         (ultimate_bundle_id, 2002, 2),  -- XP Boost 24h x2

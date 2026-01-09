@@ -19,7 +19,7 @@ var (
 	getCharactersSQL   = queries.Load("game/get_characters.sql")
 	unstuckSQL         = queries.Load("game/unstuck.sql")
 	verifyCharacterSQL = queries.Load("game/verify_character.sql")
-	purchaseItemSQL    = queries.Load("game/purchase_item.sql")
+	addItemSQL         = queries.Load("game/add_item_to_account.sql")
 )
 
 type GameHandler struct {
@@ -326,7 +326,7 @@ func (h *GameHandler) PurchaseItem(w http.ResponseWriter, r *http.Request) {
 		quantity := content["quantity"]
 
 		var result int
-		err = h.accountDB.QueryRow(purchaseItemSQL, creds.GameAccountID, 0, goodsNo, quantity).Scan(&result)
+		err = h.accountDB.QueryRow(addItemSQL, creds.GameAccountID, 0, goodsNo, quantity).Scan(&result)
 		if err != nil {
 			slog.Error("failed to add item to game account", "error", err, "user_id", claims.UserID, "goods_no", goodsNo)
 			http.Error(w, "Failed to add item to game account", http.StatusInternalServerError)
@@ -359,5 +359,140 @@ func (h *GameHandler) PurchaseItem(w http.ResponseWriter, r *http.Request) {
 		"success":     true,
 		"message":     "Item purchased successfully",
 		"new_balance": newBalance,
+	})
+}
+
+type RedeemVoucherRequest struct {
+	Code string `json:"code"`
+}
+
+func (h *GameHandler) RedeemVoucher(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetClaims(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req RedeemVoucherRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Code == "" {
+		http.Error(w, "Voucher code required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify game account linked
+	creds, err := h.userRepo.GetGameCredentials(claims.UserID)
+	if err != nil || creds == nil {
+		slog.Error("failed to fetch credentials", "error", err, "user_id", claims.UserID)
+		http.Error(w, "No game account linked", http.StatusForbidden)
+		return
+	}
+
+	// Get voucher details
+	voucher, err := h.userRepo.GetVoucherByCode(req.Code)
+	if err == sql.ErrNoRows {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid voucher code",
+		})
+		return
+	}
+	if err != nil {
+		slog.Error("failed to get voucher", "error", err, "code", req.Code)
+		http.Error(w, "Failed to get voucher details", http.StatusInternalServerError)
+		return
+	}
+
+	voucherID := voucher["id"].(int)
+
+	// Check if already redeemed
+	redeemed, err := h.userRepo.IsVoucherRedeemed(claims.UserID, voucherID)
+	if err != nil {
+		slog.Error("failed to check redemption status", "error", err)
+		http.Error(w, "Failed to check voucher status", http.StatusInternalServerError)
+		return
+	}
+
+	if redeemed {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Voucher already redeemed",
+		})
+		return
+	}
+
+	// Check if voucher has reached max total redemptions
+	if maxTotal := voucher["max_total_redemptions"]; maxTotal != nil {
+		maxTotalRedemptions := maxTotal.(int)
+		totalRedemptions, err := h.userRepo.GetTotalRedemptionCount(voucherID)
+		if err != nil {
+			slog.Error("failed to get total redemption count", "error", err)
+			http.Error(w, "Failed to check voucher availability", http.StatusInternalServerError)
+			return
+		}
+
+		if totalRedemptions >= maxTotalRedemptions {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusGone)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Voucher has reached maximum redemptions",
+			})
+			return
+		}
+	}
+
+	// Get voucher contents
+	contents, err := h.userRepo.GetVoucherContents(voucherID)
+	if err != nil {
+		slog.Error("failed to get voucher contents", "error", err, "voucher_id", voucherID)
+		http.Error(w, "Failed to get voucher contents", http.StatusInternalServerError)
+		return
+	}
+
+	if len(contents) == 0 {
+		http.Error(w, "Voucher has no contents configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Add all goods to game account
+	for _, content := range contents {
+		goodsNo := content["game_goods_no"]
+		quantity := content["quantity"]
+
+		var result int
+		err = h.accountDB.QueryRow(addItemSQL, creds.GameAccountID, 0, goodsNo, quantity).Scan(&result)
+		if err != nil {
+			slog.Error("failed to add voucher item to game account", "error", err, "user_id", claims.UserID, "goods_no", goodsNo)
+			http.Error(w, "Failed to add voucher items to game account", http.StatusInternalServerError)
+			return
+		}
+
+		if result != 1 {
+			slog.Error("stored procedure failed", "result", result, "goods_no", goodsNo)
+			http.Error(w, "Failed to add voucher items to game account", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Mark voucher as redeemed
+	err = h.userRepo.MarkVoucherRedeemed(claims.UserID, voucherID)
+	if err != nil {
+		slog.Error("failed to mark voucher as redeemed", "error", err, "user_id", claims.UserID, "voucher_id", voucherID)
+		http.Error(w, "Failed to complete redemption", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("voucher redeemed", "user_id", claims.UserID, "voucher_code", req.Code, "voucher_id", voucherID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Voucher redeemed successfully! Items have been added to your account.",
 	})
 }
