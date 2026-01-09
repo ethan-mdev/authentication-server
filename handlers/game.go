@@ -19,6 +19,7 @@ var (
 	getCharactersSQL   = queries.Load("game/get_characters.sql")
 	unstuckSQL         = queries.Load("game/unstuck.sql")
 	verifyCharacterSQL = queries.Load("game/verify_character.sql")
+	purchaseItemSQL    = queries.Load("game/purchase_item.sql")
 )
 
 type GameHandler struct {
@@ -38,6 +39,10 @@ type Character struct {
 
 type UnstuckRequest struct {
 	CharacterName string `json:"character_name"`
+}
+
+type PurchaseItemRequest struct {
+	ItemID int `json:"item_id"`
 }
 
 func NewGameHandler(userRepo *storage.ExtendedUserRepository, accountDB, characterDB *sql.DB) *GameHandler {
@@ -262,4 +267,97 @@ func generateApiKey(length int) (string, error) {
 func md5Hash(text string) string {
 	hash := md5.Sum([]byte(text))
 	return hex.EncodeToString(hash[:])
+}
+
+func (h *GameHandler) PurchaseItem(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetClaims(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req PurchaseItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ItemID <= 0 {
+		http.Error(w, "Invalid item ID", http.StatusBadRequest)
+		return
+	}
+
+	// Verify game account linked
+	creds, err := h.userRepo.GetGameCredentials(claims.UserID)
+	if err != nil || creds == nil {
+		slog.Error("failed to fetch credentials", "error", err, "user_id", claims.UserID)
+		http.Error(w, "No game account linked", http.StatusForbidden)
+		return
+	}
+
+	// Get item details
+	item, err := h.userRepo.GetItemByID(req.ItemID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Item not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.Error("failed to get item", "error", err, "item_id", req.ItemID)
+		http.Error(w, "Failed to get item details", http.StatusInternalServerError)
+		return
+	}
+
+	// Get item contents (what goods to send to game)
+	contents, err := h.userRepo.GetItemContents(req.ItemID)
+	if err != nil {
+		slog.Error("failed to get item contents", "error", err, "item_id", req.ItemID)
+		http.Error(w, "Failed to get item contents", http.StatusInternalServerError)
+		return
+	}
+
+	if len(contents) == 0 {
+		http.Error(w, "Item has no contents configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Add all goods to game account
+	for _, content := range contents {
+		goodsNo := content["game_goods_no"]
+		quantity := content["quantity"]
+
+		var result int
+		err = h.accountDB.QueryRow(purchaseItemSQL, creds.GameAccountID, 0, goodsNo, quantity).Scan(&result)
+		if err != nil {
+			slog.Error("failed to add item to game account", "error", err, "user_id", claims.UserID, "goods_no", goodsNo)
+			http.Error(w, "Failed to add item to game account", http.StatusInternalServerError)
+			return
+		}
+
+		if result != 1 {
+			slog.Error("stored procedure failed", "result", result, "goods_no", goodsNo)
+			http.Error(w, "Failed to add item to game account", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Purchase item (deduct balance and record purchase)
+	newBalance, err := h.userRepo.PurchaseItem(claims.UserID, req.ItemID, 1)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Insufficient balance", http.StatusPaymentRequired)
+		return
+	}
+	if err != nil {
+		slog.Error("failed to complete purchase", "error", err, "user_id", claims.UserID)
+		http.Error(w, "Failed to complete purchase", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("item purchased", "user_id", claims.UserID, "item_id", req.ItemID, "item_name", item["name"], "new_balance", newBalance)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":     true,
+		"message":     "Item purchased successfully",
+		"new_balance": newBalance,
+	})
 }

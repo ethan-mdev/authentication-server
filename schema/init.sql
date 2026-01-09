@@ -116,6 +116,17 @@ CREATE TABLE IF NOT EXISTS dashboard.items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Maps items to game goods (supports bundles with multiple goods)
+CREATE TABLE IF NOT EXISTS dashboard.item_contents (
+    id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL,
+    game_goods_no INTEGER NOT NULL,
+    quantity INTEGER DEFAULT 1,
+    FOREIGN KEY (item_id) REFERENCES dashboard.items(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_item_contents_item ON dashboard.item_contents(item_id);
+
 CREATE TABLE IF NOT EXISTS dashboard.item_mall_purchases (
     id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,

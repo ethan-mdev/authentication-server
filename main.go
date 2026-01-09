@@ -139,6 +139,7 @@ func main() {
 	mux.Handle("GET /game/characters", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.GetCharacters)))
 	mux.Handle("POST /game/verify", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.Verify)))
 	mux.Handle("POST /game/unstuck", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.UnstuckCharacter)))
+	mux.Handle("POST /game/purchase", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.PurchaseItem)))
 
 	// Admin routes
 	mux.Handle("GET /admin/users",

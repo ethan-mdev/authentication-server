@@ -167,3 +167,108 @@ func (r *ExtendedUserRepository) ListAll() ([]map[string]interface{}, error) {
 
 	return users, nil
 }
+
+// GetItemByID fetches an item from the dashboard.items table
+func (r *ExtendedUserRepository) GetItemByID(itemID int) (map[string]interface{}, error) {
+	var id, price int
+	var name, itemType string
+	var description, image sql.NullString
+
+	err := r.db.QueryRow(`
+		SELECT id, name, description, type, price, image
+		FROM dashboard.items
+		WHERE id = $1
+	`, itemID).Scan(&id, &name, &description, &itemType, &price, &image)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"id":          id,
+		"name":        name,
+		"description": description.String,
+		"type":        itemType,
+		"price":       price,
+		"image":       image.String,
+	}, nil
+}
+
+// GetItemContents returns the game goods this item contains (for bundles)
+func (r *ExtendedUserRepository) GetItemContents(itemID int) ([]map[string]int, error) {
+	rows, err := r.db.Query(`
+		SELECT game_goods_no, quantity
+		FROM dashboard.item_contents
+		WHERE item_id = $1
+		ORDER BY id
+	`, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var contents []map[string]int
+	for rows.Next() {
+		var goodsNo, quantity int
+		if err := rows.Scan(&goodsNo, &quantity); err != nil {
+			return nil, err
+		}
+		contents = append(contents, map[string]int{
+			"game_goods_no": goodsNo,
+			"quantity":      quantity,
+		})
+	}
+
+	return contents, rows.Err()
+}
+
+// PurchaseItem handles the entire purchase transaction atomically
+func (r *ExtendedUserRepository) PurchaseItem(userID string, itemID, quantity int) (newBalance int, err error) {
+	// Start transaction
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// Get item price
+	var price int
+	err = tx.QueryRow(`SELECT price FROM dashboard.items WHERE id = $1`, itemID).Scan(&price)
+	if err != nil {
+		return 0, err
+	}
+
+	totalCost := price * quantity
+
+	// Check and deduct balance
+	err = tx.QueryRow(`
+		UPDATE users 
+		SET balance = balance - $1 
+		WHERE id = $2 AND balance >= $1
+		RETURNING balance
+	`, totalCost, userID).Scan(&newBalance)
+
+	if err == sql.ErrNoRows {
+		return 0, sql.ErrNoRows // Insufficient balance
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	// Record purchase
+	_, err = tx.Exec(`
+		INSERT INTO dashboard.item_mall_purchases (user_id, item_id, quantity, price_paid)
+		VALUES ($1, $2, $3, $4)
+	`, userID, itemID, quantity, totalCost)
+
+	if err != nil {
+		return 0, err
+	}
+
+	// Commit transaction
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return newBalance, nil
+}
