@@ -367,3 +367,62 @@ func (r *ExtendedUserRepository) GetTotalRedemptionCount(voucherID int) (int, er
 	`, voucherID).Scan(&count)
 	return count, err
 }
+
+// Discord Verification Methods
+
+type DiscordVerification struct {
+	DiscordID       string
+	DiscordUsername string
+	ExpiresAt       string
+	Used            bool
+}
+
+// CreateDiscordVerification stores a new verification token
+func (r *ExtendedUserRepository) CreateDiscordVerification(token, discordID, discordUsername string, expiresAt interface{}) error {
+	_, err := r.db.Exec(`
+		INSERT INTO public.discord_verifications (token, discord_id, discord_username, expires_at, used)
+		VALUES ($1, $2, $3, $4, false)
+	`, token, discordID, discordUsername, expiresAt)
+	return err
+}
+
+// GetDiscordVerification fetches a verification by token
+func (r *ExtendedUserRepository) GetDiscordVerification(token string) (*DiscordVerification, error) {
+	var v DiscordVerification
+	var expiresAt string
+	err := r.db.QueryRow(`
+		SELECT discord_id, discord_username, expires_at, used
+		FROM public.discord_verifications
+		WHERE token = $1
+	`, token).Scan(&v.DiscordID, &v.DiscordUsername, &expiresAt, &v.Used)
+
+	if err != nil {
+		return nil, err
+	}
+	v.ExpiresAt = expiresAt
+	return &v, nil
+}
+
+// MarkDiscordVerificationUsed marks a token as used
+func (r *ExtendedUserRepository) MarkDiscordVerificationUsed(token, userID string) error {
+	_, err := r.db.Exec(`
+		UPDATE public.discord_verifications
+		SET used = true, used_at = NOW(), used_by = $1
+		WHERE token = $2
+	`, userID, token)
+	return err
+}
+
+// LinkDiscordAndGameAccount links both Discord and game account to a user
+func (r *ExtendedUserRepository) LinkDiscordAndGameAccount(userID string, gameAccountID int, apiKey, discordID, discordUsername string) error {
+	_, err := r.db.Exec(`
+		UPDATE public.users
+		SET game_account_id = $1,
+		    game_api_key = $2,
+		    discord_id = $3,
+		    discord_username = $4,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $5
+	`, gameAccountID, apiKey, discordID, discordUsername, userID)
+	return err
+}

@@ -117,6 +117,8 @@ func main() {
 
 	gameHandler := handlers.NewGameHandler(users, gameAccountDB, gameCharacterDB)
 
+	discordHandler := handlers.NewDiscordHandler(users, gameAccountDB, cfg.BotSharedSecret, cfg.BotWebhookURL)
+
 	adminHandler := &handlers.AdminHandler{
 		Users: users,
 	}
@@ -137,10 +139,13 @@ func main() {
 	// Game routes
 	mux.Handle("GET /game/credentials", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.GetCredentials)))
 	mux.Handle("GET /game/characters", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.GetCharacters)))
-	mux.Handle("POST /game/verify", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.Verify)))
 	mux.Handle("POST /game/unstuck", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.UnstuckCharacter)))
 	mux.Handle("POST /game/purchase", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.PurchaseItem)))
 	mux.Handle("POST /game/voucher/redeem", middleware.Auth(jwtManager, http.HandlerFunc(gameHandler.RedeemVoucher)))
+
+	// Discord routes
+	mux.HandleFunc("POST /bot/create-verification", discordHandler.CreateVerificationToken)
+	mux.Handle("POST /discord/verify", middleware.Auth(jwtManager, http.HandlerFunc(discordHandler.CompleteDiscordVerification)))
 
 	// Admin routes
 	mux.Handle("GET /admin/users",

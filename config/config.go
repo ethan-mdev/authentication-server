@@ -13,6 +13,8 @@ type Config struct {
 	GameCharacterDBURL string // MySQL (game characters)
 	Port               string
 	AllowedOrigins     []string
+	BotSharedSecret    string
+	BotWebhookURL      string
 }
 
 func Load() (*Config, error) {
@@ -26,5 +28,7 @@ func Load() (*Config, error) {
 		GameCharacterDBURL: os.Getenv("GAME_CHARACTER_DB_URL"),
 		Port:               os.Getenv("PORT"),
 		AllowedOrigins:     []string{"*"},
+		BotSharedSecret:    os.Getenv("BOT_SHARED_SECRET"),
+		BotWebhookURL:      os.Getenv("BOT_WEBHOOK_URL"),
 	}, nil
 }

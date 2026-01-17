@@ -21,13 +21,16 @@ CREATE TABLE IF NOT EXISTS public.users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Game account linking (NULL = unverified)
     game_account_id INTEGER DEFAULT NULL,
-    game_api_key TEXT DEFAULT NULL
+    game_api_key TEXT DEFAULT NULL,
+    -- Discord account linking (NULL = unverified)
+    discord_id VARCHAR(255) DEFAULT NULL,
+    discord_username VARCHAR(255) DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON public.users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_users_game_account ON public.users(game_account_id);
-
+CREATE INDEX IF NOT EXISTS idx_users_discord_id ON public.users(discord_id);
 CREATE TABLE IF NOT EXISTS public.refresh_tokens (
     token VARCHAR(255) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
@@ -53,6 +56,21 @@ CREATE TRIGGER update_users_timestamp
 BEFORE UPDATE ON public.users
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS public.discord_verifications (
+    token VARCHAR(255) PRIMARY KEY,
+    discord_id VARCHAR(255) NOT NULL,
+    discord_username VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT false,
+    used_at TIMESTAMP DEFAULT NULL,
+    used_by VARCHAR(36) DEFAULT NULL,
+    FOREIGN KEY (used_by) REFERENCES public.users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_discord_verifications_discord_id ON public.discord_verifications(discord_id);
+CREATE INDEX IF NOT EXISTS idx_discord_verifications_expires ON public.discord_verifications(expires_at);
 
 -- ============================================
 -- FORUM SCHEMA

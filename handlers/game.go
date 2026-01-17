@@ -1,10 +1,7 @@
 package handlers
 
 import (
-	"crypto/md5"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -191,82 +188,6 @@ func (h *GameHandler) UnstuckCharacter(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": req.CharacterName + " has been moved to town.",
 	})
-}
-
-func (h *GameHandler) Verify(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.GetClaims(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Check if already linked
-	linked, err := h.userRepo.IsGameLinked(claims.UserID)
-	if err != nil {
-		http.Error(w, "Failed to check link status", http.StatusInternalServerError)
-		return
-	}
-	if linked {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"error":   "already_linked",
-			"message": "Game account already linked",
-		})
-		return
-	}
-
-	// Get username for game account
-	username, err := h.userRepo.GetUsernameByID(claims.UserID)
-	if err != nil {
-		http.Error(w, "Failed to get username", http.StatusInternalServerError)
-		return
-	}
-
-	// Generate API key
-	apiKey, err := generateApiKey(16)
-	if err != nil {
-		http.Error(w, "Failed to generate API key", http.StatusInternalServerError)
-		return
-	}
-
-	// MD5 hash for game database
-	md5Hash := md5Hash(apiKey)
-
-	// Create account in SQL Server
-	var gameAccountID int
-	err = h.accountDB.QueryRow(createAccountSQL, username, md5Hash).Scan(&gameAccountID)
-	if err != nil {
-		http.Error(w, "Failed to create game account: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Link in PostgreSQL
-	err = h.userRepo.LinkGameAccount(claims.UserID, gameAccountID, apiKey)
-	if err != nil {
-		http.Error(w, "Failed to link game account", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":         true,
-		"message":         "Game account created",
-		"game_account_id": gameAccountID,
-	})
-}
-
-func generateApiKey(length int) (string, error) {
-	bytes := make([]byte, length/2)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
-func md5Hash(text string) string {
-	hash := md5.Sum([]byte(text))
-	return hex.EncodeToString(hash[:])
 }
 
 func (h *GameHandler) PurchaseItem(w http.ResponseWriter, r *http.Request) {
