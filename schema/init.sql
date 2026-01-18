@@ -127,6 +127,29 @@ CREATE TABLE IF NOT EXISTS forum.post_reactions (
 
 CREATE INDEX IF NOT EXISTS idx_post_reactions_post ON forum.post_reactions(post_id);
 CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON forum.post_reactions(user_id);
+
+-- Badges System
+CREATE TABLE IF NOT EXISTS forum.badges (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    bg_color TEXT NOT NULL,
+    text_color TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS forum.user_badges (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    badge_id INTEGER NOT NULL,
+    awarded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+    FOREIGN KEY (badge_id) REFERENCES forum.badges(id) ON DELETE CASCADE,
+    UNIQUE(user_id, badge_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_badges_user ON forum.user_badges(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_badges_badge ON forum.user_badges(badge_id);
+
 CREATE INDEX IF NOT EXISTS idx_threads_category ON forum.threads(category_id);
 CREATE INDEX IF NOT EXISTS idx_threads_author ON forum.threads(author_id);
 CREATE INDEX IF NOT EXISTS idx_posts_thread ON forum.posts(thread_id);
