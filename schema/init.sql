@@ -114,6 +114,19 @@ CREATE TABLE IF NOT EXISTS forum.posts (
     FOREIGN KEY (author_id) REFERENCES public.users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS forum.post_reactions (
+    id SERIAL PRIMARY KEY,
+    post_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
+    reaction_type TEXT NOT NULL CHECK (reaction_type IN ('like', 'heart', 'laugh', 'sad', 'wow', 'angry', 'celebrate')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES forum.posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+    UNIQUE(post_id, user_id, reaction_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_post_reactions_post ON forum.post_reactions(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON forum.post_reactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_threads_category ON forum.threads(category_id);
 CREATE INDEX IF NOT EXISTS idx_threads_author ON forum.threads(author_id);
 CREATE INDEX IF NOT EXISTS idx_posts_thread ON forum.posts(thread_id);
