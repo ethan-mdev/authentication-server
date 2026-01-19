@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS forum.threads (
     is_locked BOOLEAN DEFAULT false,
     is_sticky BOOLEAN DEFAULT false,
     is_deleted BOOLEAN DEFAULT false,
+    view_count INTEGER DEFAULT 0,
     FOREIGN KEY (category_id) REFERENCES forum.categories(id) ON DELETE CASCADE,
     FOREIGN KEY (author_id) REFERENCES public.users(id) ON DELETE CASCADE
 );
@@ -125,10 +126,6 @@ CREATE TABLE IF NOT EXISTS forum.post_reactions (
     UNIQUE(post_id, user_id, reaction_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_post_reactions_post ON forum.post_reactions(post_id);
-CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON forum.post_reactions(user_id);
-
--- Badges System
 CREATE TABLE IF NOT EXISTS forum.badges (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -147,9 +144,11 @@ CREATE TABLE IF NOT EXISTS forum.user_badges (
     UNIQUE(user_id, badge_id)
 );
 
+
 CREATE INDEX IF NOT EXISTS idx_user_badges_user ON forum.user_badges(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_badges_badge ON forum.user_badges(badge_id);
-
+CREATE INDEX IF NOT EXISTS idx_post_reactions_post ON forum.post_reactions(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON forum.post_reactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_threads_category ON forum.threads(category_id);
 CREATE INDEX IF NOT EXISTS idx_threads_author ON forum.threads(author_id);
 CREATE INDEX IF NOT EXISTS idx_posts_thread ON forum.posts(thread_id);
