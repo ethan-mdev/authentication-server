@@ -105,34 +105,15 @@ func (h *GameHandler) GetCharacters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.characterDB.Query(getCharactersSQL, creds.GameAccountID)
-	if err != nil {
-		slog.Error("failed to query characters", "error", err, "game_account_id", creds.GameAccountID)
-		http.Error(w, "Failed to fetch characters", http.StatusInternalServerError)
-		return
+	// DOCKER-DEMO BRANCH: Always return mock characters
+	mockChars := []Character{
+		{CharNo: 1, Name: "DemoWarrior", Level: 65, Playtime: 1200, Money: 5000000, ClassID: 1},
+		{CharNo: 2, Name: "DemoMage", Level: 45, Playtime: 800, Money: 2500000, ClassID: 2},
+		{CharNo: 3, Name: "DemoCleric", Level: 50, Playtime: 950, Money: 3200000, ClassID: 3},
 	}
-	defer rows.Close()
-
-	characters := []Character{}
-	for rows.Next() {
-		var c Character
-		if err := rows.Scan(&c.CharNo, &c.Name, &c.Level, &c.Playtime, &c.Money, &c.ClassID); err != nil {
-			slog.Error("failed to scan character", "error", err)
-			continue
-		}
-		characters = append(characters, c)
-	}
-
-	if err := rows.Err(); err != nil {
-		slog.Error("error iterating characters", "error", err)
-		http.Error(w, "Failed to fetch characters", http.StatusInternalServerError)
-		return
-	}
-
-	slog.Debug("fetched characters", "user_id", claims.UserID, "count", len(characters))
-
+	slog.Debug("returning mock characters", "user_id", claims.UserID, "count", len(mockChars))
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(characters)
+	json.NewEncoder(w).Encode(mockChars)
 }
 
 func (h *GameHandler) UnstuckCharacter(w http.ResponseWriter, r *http.Request) {
@@ -161,29 +142,8 @@ func (h *GameHandler) UnstuckCharacter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify character belongs to user
-	var charNo int
-	err = h.characterDB.QueryRow(verifyCharacterSQL, req.CharacterName, creds.GameAccountID).Scan(&charNo)
-	if err == sql.ErrNoRows {
-		http.Error(w, "Character not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		slog.Error("failed to verify character", "error", err)
-		http.Error(w, "Failed to verify character", http.StatusInternalServerError)
-		return
-	}
-
-	// Move character to safe location
-	_, err = h.characterDB.Exec(unstuckSQL, charNo)
-	if err != nil {
-		slog.Error("failed to unstuck character", "error", err, "char_no", charNo)
-		http.Error(w, "Unstuck operation failed", http.StatusInternalServerError)
-		return
-	}
-
-	slog.Info("character unstuck", "user_id", claims.UserID, "character", req.CharacterName)
-
+	// DOCKER-DEMO BRANCH: Always return success
+	slog.Info("mock unstuck character", "user_id", claims.UserID, "character", req.CharacterName)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": req.CharacterName + " has been moved to town.",
@@ -241,27 +201,10 @@ func (h *GameHandler) PurchaseItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add all goods to game account
-	for _, content := range contents {
-		goodsNo := content["game_goods_no"]
-		quantity := content["quantity"]
+	// DOCKER-DEMO BRANCH: Skip actual item delivery to game account
+	slog.Info("mock item delivery", "user_id", claims.UserID, "item_id", req.ItemID, "contents", len(contents))
 
-		var result int
-		err = h.accountDB.QueryRow(addItemSQL, creds.GameAccountID, 0, goodsNo, quantity).Scan(&result)
-		if err != nil {
-			slog.Error("failed to add item to game account", "error", err, "user_id", claims.UserID, "goods_no", goodsNo)
-			http.Error(w, "Failed to add item to game account", http.StatusInternalServerError)
-			return
-		}
-
-		if result != 1 {
-			slog.Error("stored procedure failed", "result", result, "goods_no", goodsNo)
-			http.Error(w, "Failed to add item to game account", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Purchase item (deduct balance and record purchase)
+	// Purchase item (deduct balance and record purchase - this still happens)
 	newBalance, err := h.userRepo.PurchaseItem(claims.UserID, req.ItemID, 1)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Insufficient balance", http.StatusPaymentRequired)
@@ -381,27 +324,10 @@ func (h *GameHandler) RedeemVoucher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add all goods to game account
-	for _, content := range contents {
-		goodsNo := content["game_goods_no"]
-		quantity := content["quantity"]
+	// DOCKER-DEMO BRANCH: Skip actual item delivery to game account
+	slog.Info("mock voucher delivery", "user_id", claims.UserID, "voucher_id", voucherID, "contents", len(contents))
 
-		var result int
-		err = h.accountDB.QueryRow(addItemSQL, creds.GameAccountID, 0, goodsNo, quantity).Scan(&result)
-		if err != nil {
-			slog.Error("failed to add voucher item to game account", "error", err, "user_id", claims.UserID, "goods_no", goodsNo)
-			http.Error(w, "Failed to add voucher items to game account", http.StatusInternalServerError)
-			return
-		}
-
-		if result != 1 {
-			slog.Error("stored procedure failed", "result", result, "goods_no", goodsNo)
-			http.Error(w, "Failed to add voucher items to game account", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Mark voucher as redeemed
+	// Mark voucher as redeemed (this still happens)
 	err = h.userRepo.MarkVoucherRedeemed(claims.UserID, voucherID)
 	if err != nil {
 		slog.Error("failed to mark voucher as redeemed", "error", err, "user_id", claims.UserID, "voucher_id", voucherID)
